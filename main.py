@@ -1,7 +1,9 @@
 import os
 import sys
-import threading
-import yt_dlp
+
+# FIXES THE BLACK VIDEO SCREEN BUG BY FORCING GPU FALLBACK
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+
 from PyQt6.QtCore import QUrl
 from PyQt6.QtWebEngineCore import QWebEngineScript
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -64,7 +66,7 @@ class ADtubePlayer(QMainWindow):
     self.resize(1280, 720)
     self.setStyleSheet("background-color: #0f0f0f; color: #fff;")
 
-    self.ad_speed = 16  # Default ad speed
+    self.ad_speed = 16  # Default speed
 
     central_widget = QWidget()
     self.setCentralWidget(central_widget)
@@ -72,7 +74,7 @@ class ADtubePlayer(QMainWindow):
     main_layout.setContentsMargins(0, 0, 0, 0)
     main_layout.setSpacing(0)
 
-    # Custom Minimal Top Bar (Locked Height)
+    # Custom Minimal Top Bar
     top_bar = QWidget()
     top_bar.setFixedHeight(46)
     top_bar.setStyleSheet(
@@ -84,14 +86,12 @@ class ADtubePlayer(QMainWindow):
     self.btn_back = QPushButton("←")
     self.btn_forward = QPushButton("→")
     self.btn_home = QPushButton("🏠 Home")
-    self.btn_download = QPushButton("📥 Download Video")
     self.btn_settings = QPushButton("⚙ Settings")
 
     for btn in [
         self.btn_back,
         self.btn_forward,
         self.btn_home,
-        self.btn_download,
         self.btn_settings,
     ]:
       btn.setStyleSheet(
@@ -99,12 +99,6 @@ class ADtubePlayer(QMainWindow):
           " border-radius: 4px; font-weight: bold;"
       )
       bar_layout.addWidget(btn)
-
-    # Highlight download button slightly so it stands out
-    self.btn_download.setStyleSheet(
-        "background: #cc0000; color: #fff; border: none; padding: 6px 12px;"
-        " border-radius: 4px; font-weight: bold;"
-    )
 
     bar_layout.addStretch()
     main_layout.addWidget(top_bar, 0)
@@ -120,7 +114,6 @@ class ADtubePlayer(QMainWindow):
     self.btn_home.clicked.connect(
         lambda: self.view.setUrl(QUrl("https://www.youtube.com"))
     )
-    self.btn_download.clicked.connect(self.start_download)
     self.btn_settings.clicked.connect(self.open_settings)
 
     # Load YouTube directly
@@ -153,50 +146,6 @@ class ADtubePlayer(QMainWindow):
     profile = self.view.page().profile()
     profile.scripts().clear()
     profile.scripts().insert(adblock_js)
-
-  def start_download(self):
-    current_url = self.view.url().toString()
-    if "watch?v=" in current_url or "youtu.be/" in current_url:
-      self.btn_download.setText("📥 Downloading...")
-      self.btn_download.setEnabled(False)
-      # Run in background thread so UI doesn't freeze
-      threading.Thread(
-          target=self.download_worker, args=(current_url,), daemon=True
-      ).start()
-    else:
-      self.btn_download.setText("⚠️ Open a Video First!")
-      # Reset text after 2 seconds
-      threading.Timer(
-          2.0, lambda: self.btn_download.setText("📥 Download Video")
-      ).start()
-
-  def download_worker(self, url):
-    try:
-      downloads_path = os.path.join(os.path.expanduser("~"), "Downloads")
-      ydl_opts = {
-          "outtmpl": os.path.join(downloads_path, "%(title)s.%(ext)s"),
-          "format": "best",
-      }
-      with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-      self.download_complete_ui(success=True)
-    except Exception as e:
-      print("Download failed:", e)
-      self.download_complete_ui(success=False)
-
-  def download_complete_ui(self, success):
-    if success:
-      self.btn_download.setText("✅ Downloaded!")
-    else:
-      self.btn_download.setText("❌ Failed")
-    # Reset button text back after 3 seconds
-    threading.Timer(
-        3.0,
-        lambda: (
-            self.btn_download.setText("📥 Download Video"),
-            self.btn_download.setEnabled(True),
-        ),
-    ).start()
 
   def open_settings(self):
     dialog = SettingsDialog(self.ad_speed, self)
